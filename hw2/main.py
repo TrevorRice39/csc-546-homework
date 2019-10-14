@@ -2,7 +2,7 @@
 Author: Trevor Rice
 Course: CSC 546
 Assignment: Homework 2: Create a deep and wide neural network that can determine
-a number value(0-9) of a handwritten digit, using the MNIST data set
+a number value(0-9) of a handwritten digit, using the MNIST data set. 
 '''
 
 import tensorflow as tf
@@ -28,35 +28,65 @@ Y = tf.placeholder(tf.float32, [None, nb_classes])
 
 # first layer
 nb_classes_layer1 = 40
-W1 = tf.Variable(tf.random_normal([784, nb_classes_layer1]))
-b1 = tf.Variable(tf.random_normal([nb_classes_layer1]))
-layer1 = tf.nn.softmax(tf.matmul(X, W1) + b1)
+with tf.name_scope("layer1") as scope:
+    W1 = tf.Variable(tf.random_normal([784, nb_classes_layer1]))
+    b1 = tf.Variable(tf.random_normal([nb_classes_layer1]))
+    layer1 = tf.nn.softmax(tf.matmul(X, W1) + b1)
+
+    w1_hist = tf.summary.histogram("W1", W1)
+    b1_hist = tf.summary.histogram("b1", b1)
+    layer1_hist = tf.summary.histogram("layer1", layer1)
 
 # second layer
 nb_classes_layer2 = 20
-W2 = tf.Variable(tf.random_normal([nb_classes_layer1, nb_classes_layer2]))
-b2 = tf.Variable(tf.random_normal([nb_classes_layer2]))
-layer2 = tf.nn.softmax(tf.matmul(layer1, W2) + b2)
+with tf.name_scope("layer2") as scope:
+    W2 = tf.Variable(tf.random_normal([nb_classes_layer1, nb_classes_layer2]))
+    b2 = tf.Variable(tf.random_normal([nb_classes_layer2]))
+    layer2 = tf.nn.softmax(tf.matmul(layer1, W2) + b2)
+
+    w2_hist = tf.summary.histogram("W2", W2)
+    b2_hist = tf.summary.histogram("b2", b2)
+    layer2_hist = tf.summary.histogram("layer2", layer2)
 
 # hypothesis
-W3 = tf.Variable(tf.random_normal([nb_classes_layer2, nb_classes]))
-b3 = tf.Variable(tf.random_normal([nb_classes]))
-hypothesis = tf.nn.softmax(tf.matmul(layer2, W3) + b3)
+with tf.name_scope("output") as scope:
+    W3 = tf.Variable(tf.random_normal([nb_classes_layer2, nb_classes]))
+    b3 = tf.Variable(tf.random_normal([nb_classes]))
+    hypothesis = tf.nn.softmax(tf.matmul(layer2, W3) + b3)
 
-cost = tf.reduce_mean(-tf.reduce_sum(Y * tf.log(hypothesis), axis=1))
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=1.5).minimize(cost)
+    w3_hist = tf.summary.histogram("W3", W3)
+    b3_hist = tf.summary.histogram("b3", b3)
+    hypothesis_hist = tf.summary.histogram("hypothesis", hypothesis)
+
+with tf.name_scope("cost") as scope:
+    cost = tf.reduce_mean(-tf.reduce_sum(Y * tf.log(hypothesis), axis=1))
+    cost_scalar = tf.summary.scalar("cost", cost)
+
+with tf.name_scope("optimizer") as scope:
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1.5).minimize(cost)
 
 # testing the model
 is_correct = tf.equal(tf.argmax(hypothesis, 1), tf.argmax(Y, 1))
 # calculating the accuracy
 accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
 
-# I found that roughly 90-100 epochs results in a very low cost with 1.5 learning rate
-num_epochs = 95
+# I found that roughly 60-80 epochs results in a very low cost with 1.5 learning rate
+# if you wish to run fewer epochs to save time, lower this to around 30 epochs for a
+# good balance of cost and time
+
+num_epochs = 65
 batch_size = 100
 num_iterations = int(mnist.train.num_examples / batch_size)
 
 with tf.Session() as sess:
+    # summary
+    merged_summary = tf.summary.merge_all()
+
+    # create the summary writer
+    writer = tf.summary.FileWriter(os.getcwd() + '/logs/mnist_nn_1_5')
+    # adding the graph
+    writer.add_graph(sess.graph)
+
     # initialize global variables
     sess.run(tf.global_variables_initializer())
     # training cycles
@@ -67,11 +97,12 @@ with tf.Session() as sess:
         # iterations
         for i in range(num_iterations):
             batch_xs, batch_ys = mnist.train.next_batch(batch_size)
-            c, _ = sess.run([cost, optimizer], feed_dict={
+            c, summary, _ = sess.run([cost, merged_summary, optimizer], feed_dict={
                             X: batch_xs, Y: batch_ys})
+            # adding the summary to the writer
+            writer.add_summary(summary, global_step=(num_iterations*epoch + i))
             avg_cost += c / total_batch
         print("Epoch: {:04d}, Cost: {:.9f}".format(epoch + 1, avg_cost))
-
     print("Model has completed its learning")
 
     # Test the model using test sets
@@ -91,3 +122,6 @@ with tf.Session() as sess:
         interpolation="nearest",
     )
     plt.show()
+
+# runs the tensorboard command passing in the /logs directory for the logdir
+os.system("tensorboard --logdir=" + os.getcwd() + '/logs')

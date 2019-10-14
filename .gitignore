@@ -1,2 +1,4 @@
 *.zip
 MNIST_data/
+logs/
+*.txt
